@@ -1,0 +1,3 @@
+Run 1: FAIL - expected 'a1b2c3' but received 'f9e8d7'
+Run 2: FAIL - expected 'a1b2c3' but received '3c4d5e'
+Run 3: FAIL - expected 'a1b2c3' but received '77aa11'

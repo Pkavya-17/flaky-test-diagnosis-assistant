@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flaky Test Diagnoser</title>
+<style>
+  :root{
+    --bg:#f7f7f5; --panel:#ffffff; --ink:#1a1a1a; --sub:#6b6b6b;
+    --border:#e3e2df; --accent:#b45309; --accent-soft:#fef3e2;
+    --danger:#b91c1c; --danger-soft:#fdeceb; --ok:#15803d; --ok-soft:#eaf7ee;
+    --warn:#a16207; --warn-soft:#fdf6e3; --mono:'SF Mono',Consolas,Menlo,monospace;
+    box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#141414; --panel:#1e1e1e; --ink:#eee; --sub:#999; --border:#333;
+      --accent:#e0902f; --accent-soft:#2a2013; --danger:#f87171; --danger-soft:#2a1616;
+      --ok:#4ade80; --ok-soft:#132419; --warn:#facc15; --warn-soft:#2a2410;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#141414; --panel:#1e1e1e; --ink:#eee; --sub:#999; --border:#333;
+    --accent:#e0902f; --accent-soft:#2a2013; --danger:#f87171; --danger-soft:#2a1616;
+    --ok:#4ade80; --ok-soft:#132419; --warn:#facc15; --warn-soft:#2a2410;
+  }
+  html{scroll-padding-top:env(safe-area-inset-top,0px);}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5;}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px;}
+  h1{font-size:1.3rem;margin:4px 0 2px;}
+  .tag{color:var(--sub);font-size:0.85rem;margin-bottom:6px;}
+  .disclaimer{font-size:0.75rem;color:var(--sub);background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:16px;}
+  label{display:block;font-size:0.8rem;font-weight:600;color:var(--sub);text-transform:uppercase;letter-spacing:.03em;margin:16px 0 6px;}
+  .hint{font-size:0.75rem;color:var(--sub);margin:-2px 0 6px;font-weight:400;text-transform:none;letter-spacing:0;}
+  textarea{width:100%;background:var(--panel);color:var(--ink);border:1px solid var(--border);border-radius:10px;padding:12px;font-family:var(--mono);font-size:0.85rem;resize:vertical;min-height:110px;}
+  textarea:focus{outline:2px solid var(--accent);outline-offset:1px;}
+  select{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--panel);color:var(--ink);font-size:0.88rem;}
+  button{margin-top:18px;width:100%;padding:13px;border:none;border-radius:10px;background:var(--accent);color:#fff;font-size:0.95rem;font-weight:600;cursor:pointer;}
+  button:disabled{opacity:0.6;}
+  #err{color:var(--danger);font-size:0.85rem;margin-top:10px;display:none;white-space:pre-wrap;}
+  #result{margin-top:26px;display:none;}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;}
+  .card h2{font-size:0.78rem;text-transform:uppercase;letter-spacing:.04em;color:var(--sub);margin:0 0 8px;}
+  .card p{margin:0 0 8px;font-size:0.92rem;}
+  .status-badge{display:inline-block;padding:4px 12px;border-radius:999px;font-size:0.8rem;font-weight:700;}
+  .status-intermittent{background:var(--warn-soft);color:var(--warn);}
+  .status-consistent{background:var(--danger-soft);color:var(--danger);}
+  .status-clean{background:var(--ok-soft);color:var(--ok);}
+  .stat-row{display:flex;gap:14px;flex-wrap:wrap;margin-top:6px;}
+  .stat{font-size:0.85rem;}
+  .stat b{display:block;font-size:1.1rem;}
+  .conf-badge{display:inline-block;padding:3px 10px;border-radius:999px;font-size:0.75rem;font-weight:700;background:var(--accent-soft);color:var(--accent);}
+  ul.heur{margin:6px 0 0;padding-left:18px;font-size:0.88rem;}
+  ul.heur li{margin-bottom:3px;}
+  .sev-high{color:var(--danger);font-weight:600;}
+  .sev-medium{color:var(--warn);font-weight:600;}
+  .sev-low{color:var(--sub);}
+  pre{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;overflow-x:auto;font-family:var(--mono);font-size:0.8rem;white-space:pre;}
+  .loading{color:var(--sub);font-size:0.9rem;margin-top:16px;display:none;}
+  .link-btn{background:none;border:none;color:var(--accent);font-size:0.8rem;padding:0;margin-top:4px;text-decoration:underline;width:auto;font-weight:500;}
+  .limitation{font-size:0.85rem;color:var(--sub);font-style:italic;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🩺 Flaky Test Diagnoser</h1>
+  <div class="tag">Evidence-based root-cause diagnosis for intermittently failing tests.</div>
+  <div class="disclaimer">This diagnoses <em>patterns across multiple runs</em> — a single failure is never classified as flaky. Every claim in the report is grounded in code evidence, run data, or logs; the AI is not allowed to invent evidence.</div>
+
+  <label for="demoSelect">Demo scenario (optional)</label>
+  <select id="demoSelect">
+    <option value="">— none, I'll paste my own —</option>
+  </select>
+
+  <label for="code">Test source code</label>
+  <textarea id="code" placeholder="Paste the test file / test case here..."></textarea>
+
+  <label for="runs">Run results <span class="hint">(one per line: "Run 1: PASS" or "Run 2: FAIL - reason/log snippet")</span></label>
+  <textarea id="runs" placeholder="Run 1: PASS
+Run 2: FAIL - TimeoutError: element not found
+Run 3: PASS"></textarea>
+
+  <button id="go">Diagnose flakiness</button>
+  <div class="loading" id="loading">Extracting evidence and analyzing run pattern…</div>
+  <div id="err"></div>
+
+  <div id="result"></div>
+</div>
+
+<script>
+/* ============================================================
+   MODULE: RunAnalyzer
+   Parses "Run N: PASS/FAIL - note" lines into structured stats.
+   Flakiness DETECTION (this module) is kept separate from
+   flakiness DIAGNOSIS (DiagnosisEngine below).
+   ============================================================ */
+const RunAnalyzer = (() => {
+  function parse(text) {
+    const lineRe = /run\s*(\d+)\s*:\s*(pass|fail)\s*-?\s*(.*)/i;
+    const runs = text.split('\n').map(l => l.trim()).filter(Boolean)
+      .map(line => {
+        const m = line.match(lineRe);
+        if (!m) return null;
+        return { run: Number(m[1]), result: m[2].toUpperCase(), note: (m[3] || '').trim() };
+      })
+      .filter(Boolean);
+    const total = runs.length;
+    const passed = runs.filter(r => r.result === 'PASS').length;
+    const failed = runs.filter(r => r.result === 'FAIL').length;
+    const failureRate = total > 0 ? failed / total : 0;
+    const isIntermittent = passed > 0 && failed > 0;
+    const isConsistentFailure = total > 0 && failed === total;
+    const isAllPass = total > 0 && passed === total;
+    return { runs, total, passed, failed, failureRate, isIntermittent, isConsistentFailure, isAllPass };
+  }
+  return { parse };
+})();
+
+/* ============================================================
+   MODULE: HeuristicEngine (evidence extraction)
+   Never returns booleans — returns structured evidence records:
+   { signal, category, source, evidence, severity }
+   Kept in sync with the standalone heuristics.js module (see README).
+   ============================================================ */
+const HeuristicEngine = (() => {
+  const DETECTORS = [
+    { signal:'fixed_wait', category:'timing', severity:'medium',
+      test: c => [...c.matchAll(/\b(sleep|waitForTimeout|setTimeout)\s*\(\s*\d+/g)].map(m=>m[0]) },
+    { signal:'missing_await', category:'timing', severity:'high',
+      test: c => c.split('\n').filter(l => /\b(page\.\w+|fetch|axios\.\w+|query|\.then)\s*\(/.test(l) && !/\bawait\b/.test(l)).map(l=>l.trim()).filter(Boolean) },
+    { signal:'hardcoded_date', category:'environment', severity:'medium',
+      test: c => [...c.matchAll(/(new Date\(['"][^)]*['"]\)|\b20\d{2}-\d{2}-\d{2}\b)/g)].map(m=>m[0]) },
+    { signal:'random_value', category:'assertion', severity:'medium',
+      test: c => [...c.matchAll(/\b(Math\.random\(\)|uuid\(\)|Date\.now\(\))/g)].map(m=>m[0]) },
+    { signal:'unsorted_collection_assertion', category:'assertion', severity:'low',
+      test: c => { const a=/(toEqual|toMatchObject)\s*\(\s*\[/.test(c), s=/\.sort\s*\(/.test(c); return (a && !s) ? ['array assertion without .sort() before comparison'] : []; } },
+    { signal:'shared_global_state', category:'order', severity:'high',
+      test: c => [...c.matchAll(/\b(global\.\w+|process\.env\.\w+\s*=|module\.exports\.\w+\s*=)/g)].map(m=>m[0]) },
+    { signal:'test_order_assumption', category:'order', severity:'medium',
+      test: c => { const s=/beforeAll\s*\(/.test(c), r=/beforeEach\s*\(/.test(c)||/afterEach\s*\(/.test(c); return (s && !r) ? ['beforeAll() sets up shared state with no beforeEach/afterEach reset'] : []; } },
+    { signal:'shared_resource', category:'resource', severity:'medium',
+      test: c => [...c.matchAll(/(fs\.writeFileSync|fs\.readFileSync|createServer\(.*\d{4}|:\d{4}\b)/g)].map(m=>m[0]) },
+    { signal:'database_dependency', category:'environment', severity:'medium',
+      test: c => [...c.matchAll(/\b(db\.\w+\(|SELECT\s+.+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET)/gi)].map(m=>m[0]) },
+    { signal:'external_network_call', category:'environment', severity:'medium',
+      test: c => [...c.matchAll(/\b(fetch\(|axios\.\w+\(|http\.get\(|request\()/g)].map(m=>m[0]) },
+    { signal:'parallel_execution_risk', category:'resource', severity:'medium',
+      test: c => [...c.matchAll(/\b(test\.concurrent|describe\.concurrent|Promise\.all\s*\()/g)].map(m=>m[0]) }
+  ];
+  function extract(code) {
+    const evidence = [];
+    for (const d of DETECTORS) {
+      for (const hit of (d.test(code) || [])) {
+        evidence.push({ signal:d.signal, category:d.category, source:'test_code', evidence:hit, severity:d.severity });
+      }
+    }
+    return evidence;
+  }
+  // Evidence Score: documented, non-probabilistic. See README "Evidence Score" section.
+  function computeScore(evidence, runStats) {
+    const w = { high:3, medium:2, low:1 };
+    let score = evidence.reduce((s,e) => s + (w[e.severity]||0), 0);
+    if (runStats && runStats.isIntermittent) score += 2;
+    if (runStats && runStats.total >= 5) score += 1;
+    return score;
+  }
+  return { extract, computeScore };
+})();
+
+/* ============================================================
+   MODULE: DiagnosisEngine (LLM integration layer)
+   Builds the prompt and calls the `sample` capability. This is the
+   ONLY module that talks to the LLM — swapping providers later
+   means editing only this function.
+   ============================================================ */
+const DiagnosisEngine = (() => {
+  function buildPrompt(code, runStats, evidence) {
+    return `You are a senior QA engineer diagnosing flaky tests using ONLY the evidence provided below. Do not invent evidence that is not listed.
+
+TEST CODE:
+---
+${code}
+---
+
+RUN RESULTS (structured):
+${JSON.stringify(runStats.runs, null, 2)}
+Total: ${runStats.total}, Passed: ${runStats.passed}, Failed: ${runStats.failed}, Failure rate: ${(runStats.failureRate*100).toFixed(0)}%, Intermittent: ${runStats.isIntermittent}
+
+HEURISTIC EVIDENCE EXTRACTED FROM THE CODE (structured, already detected — do not restate as if you found it yourself, but use it as grounding):
+${JSON.stringify(evidence, null, 2)}
+
+Categories you may choose from: "timing", "order", "environment", "resource", "assertion", "other".
+
+Respond ONLY with strict JSON, no markdown fences, no preamble, matching this exact shape:
+{
+  "diagnosis": {
+    "category": "one of the categories above",
+    "summary": "one sentence summary of the root cause",
+    "evidence": ["short strings referencing SPECIFIC evidence items above or run data, not invented"],
+    "reasoning": "2-4 sentences connecting the evidence to the conclusion",
+    "confidence_level": "High|Medium|Low",
+    "suggested_fix": "1-2 sentence fix approach",
+    "code_example": "short corrected snippet, just the changed part"
+  },
+  "alternative_causes": ["short strings naming 1-3 other plausible causes"]
+}
+
+If the evidence is too thin to support a confident diagnosis, say so honestly in "reasoning" and use "Low" confidence rather than guessing.`;
+  }
+
+  async function run(code, runStats, evidence) {
+    const sample = await claude.use('sample');
+    if (!sample) {
+      throw { code: 'not_granted', message: "AI diagnosis isn't available in this view. Try opening the artifact directly in Claude." };
+    }
+    const prompt = buildPrompt(code, runStats, evidence);
+    const raw = await sample.json(prompt, { modelTier: 'default' });
+    return raw;
+  }
+  return { run, buildPrompt };
+})();
+
+/* ============================================================
+   MODULE: ResponseValidator
+   Rejects malformed LLM output instead of rendering garbage or
+   silently substituting a fabricated fallback.
+   ============================================================ */
+const ResponseValidator = (() => {
+  const REQUIRED_DIAGNOSIS_FIELDS = ['category','summary','evidence','reasoning','confidence_level','suggested_fix'];
+  const VALID_CONFIDENCE = ['High','Medium','Low'];
+
+  function validate(obj) {
+    const errors = [];
+    if (!obj || typeof obj !== 'object') { errors.push('Response is not a JSON object.'); return { ok:false, errors }; }
+    if (!obj.diagnosis || typeof obj.diagnosis !== 'object') { errors.push('Missing "diagnosis" object.'); return { ok:false, errors }; }
+    for (const f of REQUIRED_DIAGNOSIS_FIELDS) {
+      if (!(f in obj.diagnosis) || obj.diagnosis[f] === '' || obj.diagnosis[f] == null) errors.push(`Missing field: diagnosis.${f}`);
+    }
+    if (obj.diagnosis.confidence_level && !VALID_CONFIDENCE.includes(obj.diagnosis.confidence_level)) {
+      errors.push(`Invalid confidence_level: "${obj.diagnosis.confidence_level}" (expected High|Medium|Low)`);
+    }
+    if (obj.diagnosis.evidence && !Array.isArray(obj.diagnosis.evidence)) errors.push('diagnosis.evidence must be an array.');
+    if (obj.alternative_causes && !Array.isArray(obj.alternative_causes)) errors.push('alternative_causes must be an array.');
+    return { ok: errors.length === 0, errors };
+  }
+  return { validate };
+})();
+
+/* ============================================================
+   MODULE: ReportRenderer
+   ============================================================ */
+const ReportRenderer = (() => {
+  function esc(s){ return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+
+  function statusBlock(runStats) {
+    let label, cls;
+    if (runStats.total === 0) { label = 'No parseable run data provided'; cls = 'status-clean'; }
+    else if (runStats.isIntermittent) { label = 'Intermittent behavior detected'; cls = 'status-intermittent'; }
+    else if (runStats.isConsistentFailure) { label = 'Consistent failure — not flaky, likely a real bug'; cls = 'status-consistent'; }
+    else { label = 'No failures observed — no evidence of flakiness yet'; cls = 'status-clean'; }
+    return `<span class="status-badge ${cls}">${esc(label)}</span>`;
+  }
+
+  function render(runStats, evidence, evidenceScore, diagnosis) {
+    const evByCat = {};
+    evidence.forEach(e => { evByCat[e.category] = evByCat[e.category] || []; evByCat[e.category].push(e); });
+    const evList = evidence.length
+      ? `<ul class="heur">${evidence.map(e => `<li><span class="sev-${e.severity}">[${esc(e.category)}]</span> ${esc(e.signal)} — <code>${esc(e.evidence)}</code></li>`).join('')}</ul>`
+      : `<p class="limitation">No heuristic signals detected in the code — diagnosis (if any) relies on run pattern and logs only.</p>`;
+
+    let diagnosisHtml = '';
+    if (diagnosis) {
+      const d = diagnosis.diagnosis;
+      diagnosisHtml = `
+        <div class="card">
+          <h2>Primary suspected root cause</h2>
+          <p><strong>${esc(d.category)}</strong> — ${esc(d.summary)}</p>
+          <span class="conf-badge">Confidence: ${esc(d.confidence_level)}</span>
+          <p style="margin-top:10px">${esc(d.reasoning)}</p>
+        </div>
+        <div class="card">
+          <h2>Evidence cited by the diagnosis</h2>
+          <ul class="heur">${(d.evidence||[]).map(e => `<li>${esc(e)}</li>`).join('')}</ul>
+        </div>
+        <div class="card">
+          <h2>Suggested fix</h2>
+          <p>${esc(d.suggested_fix)}</p>
+          ${d.code_example ? `<pre>${esc(d.code_example)}</pre>` : ''}
+        </div>
+        <div class="card">
+          <h2>Alternative possible causes</h2>
+          <ul class="heur">${(diagnosis.alternative_causes||[]).map(a => `<li>${esc(a)}</li>`).join('')}</ul>
+        </div>`;
+    }
+
+    const limitation = runStats.total < 5
+      ? `Only ${runStats.total} execution(s) provided; additional runs would improve confidence.`
+      : `${runStats.total} executions provided.`;
+
+    return `
+      <div class="card">
+        <h2>Flakiness status</h2>
+        ${statusBlock(runStats)}
+        <div class="stat-row">
+          <div class="stat">Observed failure rate<b>${runStats.failed} / ${runStats.total}</b></div>
+          <div class="stat">Evidence Score<b title="Sum of severity-weighted signals found, plus a small bonus if runs are intermittent or there are 5+ runs. Not a calibrated probability.">${evidenceScore}</b></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Evidence extracted from code</h2>
+        ${evList}
+      </div>
+      ${diagnosisHtml}
+      <div class="card">
+        <h2>Limitations / missing evidence</h2>
+        <p class="limitation">${esc(limitation)} ${runStats.isConsistentFailure ? 'All runs failed — this looks like a deterministic bug, not flakiness; diagnosis confidence should be read with that in mind.' : ''}</p>
+      </div>
+    `;
+  }
+  return { render };
+})();
+
+/* ============================================================
+   DEMO SCENARIOS — for demonstration purposes only, not real
+   production data.
+   ============================================================ */
+const DEMOS = {
+  timing: {
+    label: 'DEMO — Timing / race condition',
+    code: `test('user can complete checkout', async () => {
+  await page.click('#add-to-cart');
+  await page.click('#checkout');
+  await sleep(2000);
+  const total = await page.textContent('#order-total');
+  expect(total).toBe('$49.99');
+});`,
+    runs: `Run 1: PASS
+Run 2: FAIL - TimeoutError: element '#order-total' not found within 2000ms
+Run 3: PASS
+Run 4: FAIL - expected '$49.99' but received ''
+Run 5: PASS`
+  },
+  order: {
+    label: 'DEMO — Test-order dependency',
+    code: `let cachedUser;
+beforeAll(() => { cachedUser = createUser(); });
+
+test('user has default role', () => {
+  expect(cachedUser.role).toBe('member');
+});
+
+test('promote user to admin', () => {
+  cachedUser.role = 'admin';
+  expect(cachedUser.role).toBe('admin');
+});`,
+    runs: `Run 1: PASS
+Run 2: PASS
+Run 3: FAIL - expected role 'member' but received 'admin'
+Run 4: PASS
+Run 5: FAIL - expected role 'member' but received 'admin'`
+  },
+  environment: {
+    label: 'DEMO — Environment/data dependency',
+    code: `test('report shows correct date range', () => {
+  const report = generateReport();
+  const expected = new Date('2024-06-01');
+  expect(report.startDate).toEqual(expected);
+});`,
+    runs: `Run 1: PASS
+Run 2: FAIL - expected 2024-06-01 but received 2024-06-02
+Run 3: PASS
+Run 4: PASS
+Run 5: FAIL - expected 2024-06-01 but received 2024-06-02`
+  },
+  resource: {
+    label: 'DEMO — Resource contention',
+    code: `test('server responds on port', async () => {
+  const server = createServer().listen(4000);
+  const res = await fetch('http://localhost:4000/health');
+  expect(res.status).toBe(200);
+  server.close();
+});`,
+    runs: `Run 1: PASS
+Run 2: FAIL - Error: EADDRINUSE :::4000
+Run 3: PASS
+Run 4: FAIL - Error: EADDRINUSE :::4000
+Run 5: PASS`
+  },
+  assertion: {
+    label: 'DEMO — Non-deterministic assertion',
+    code: `test('creates unique session', () => {
+  const id = uuid();
+  const session = createSession(id);
+  expect(session.id).toBe('a1b2c3');
+});`,
+    runs: `Run 1: FAIL - expected 'a1b2c3' but received 'f9e8d7'
+Run 2: FAIL - expected 'a1b2c3' but received '3c4d5e'
+Run 3: FAIL - expected 'a1b2c3' but received '77aa11'`
+  }
+};
+
+const demoSelect = document.getElementById('demoSelect');
+Object.entries(DEMOS).forEach(([key, d]) => {
+  const opt = document.createElement('option');
+  opt.value = key; opt.textContent = d.label;
+  demoSelect.appendChild(opt);
+});
+demoSelect.addEventListener('change', () => {
+  const d = DEMOS[demoSelect.value];
+  if (!d) return;
+  document.getElementById('code').value = d.code;
+  document.getElementById('runs').value = d.runs;
+});
+
+/* ============================================================
+   ORCHESTRATION
+   ============================================================ */
+async function diagnose() {
+  const code = document.getElementById('code').value.trim();
+  const runsText = document.getElementById('runs').value.trim();
+  const err = document.getElementById('err');
+  const result = document.getElementById('result');
+  const loading = document.getElementById('loading');
+  const btn = document.getElementById('go');
+  err.style.display = 'none';
+  result.style.display = 'none';
+
+  if (!code || !runsText) {
+    err.textContent = 'Paste the test code and at least one "Run N: PASS/FAIL" line.';
+    err.style.display = 'block';
+    return;
+  }
+
+  const runStats = RunAnalyzer.parse(runsText);
+  if (runStats.total === 0) {
+    err.textContent = 'Could not parse any run lines. Use the format: "Run 1: PASS" or "Run 2: FAIL - reason".';
+    err.style.display = 'block';
+    return;
+  }
+
+  const evidence = HeuristicEngine.extract(code);
+  const evidenceScore = HeuristicEngine.computeScore(evidence, runStats);
+
+  // If there's no failure at all, we can render detection results without calling the LLM.
+  if (runStats.failed === 0) {
+    result.innerHTML = ReportRenderer.render(runStats, evidence, evidenceScore, null);
+    result.style.display = 'block';
+    return;
+  }
+
+  btn.disabled = true;
+  loading.style.display = 'block';
+  try {
+    const raw = await DiagnosisEngine.run(code, runStats, evidence);
+    const { ok, errors } = ResponseValidator.validate(raw);
+    if (!ok) {
+      err.textContent = 'The AI response did not match the expected schema, so no diagnosis is shown (no fabricated fallback):\n' + errors.join('\n');
+      err.style.display = 'block';
+      // Still show the detection layer, which doesn't depend on the LLM.
+      result.innerHTML = ReportRenderer.render(runStats, evidence, evidenceScore, null);
+      result.style.display = 'block';
+      return;
+    }
+    result.innerHTML = ReportRenderer.render(runStats, evidence, evidenceScore, raw);
+    result.style.display = 'block';
+  } catch (e) {
+    err.textContent = 'Diagnosis failed: ' + (e && e.message ? e.message : 'unknown error') + '.';
+    err.style.display = 'block';
+    result.innerHTML = ReportRenderer.render(runStats, evidence, evidenceScore, null);
+    result.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    loading.style.display = 'none';
+  }
+}
+
+document.getElementById('go').addEventListener('click', diagnose);
+</script>
+</body>
+</html>

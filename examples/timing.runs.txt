@@ -1,0 +1,5 @@
+Run 1: PASS
+Run 2: FAIL - TimeoutError: element '#order-total' not found within 2000ms
+Run 3: PASS
+Run 4: FAIL - expected '$49.99' but received ''
+Run 5: PASS

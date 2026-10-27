@@ -1,0 +1,211 @@
+{
+  "timing": {
+    "label": "DEMO — Timing / race condition",
+    "intendedCategory": "timing",
+    "runs": [
+      {
+        "run": 1,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 2,
+        "result": "FAIL",
+        "note": "TimeoutError: element '#order-total' not found within 2000ms"
+      },
+      {
+        "run": 3,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 4,
+        "result": "FAIL",
+        "note": "expected '$49.99' but received ''"
+      },
+      {
+        "run": 5,
+        "result": "PASS",
+        "note": ""
+      }
+    ],
+    "failureRate": "2/5",
+    "heuristicEvidence": [
+      {
+        "signal": "fixed_wait",
+        "category": "timing",
+        "source": "test_code",
+        "evidence": "sleep(2000",
+        "severity": "medium"
+      }
+    ]
+  },
+  "order": {
+    "label": "DEMO — Test-order dependency",
+    "intendedCategory": "order",
+    "runs": [
+      {
+        "run": 1,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 2,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 3,
+        "result": "FAIL",
+        "note": "expected role 'member' but received 'admin'"
+      },
+      {
+        "run": 4,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 5,
+        "result": "FAIL",
+        "note": "expected role 'member' but received 'admin'"
+      }
+    ],
+    "failureRate": "2/5",
+    "heuristicEvidence": [
+      {
+        "signal": "test_order_assumption",
+        "category": "order",
+        "source": "test_code",
+        "evidence": "beforeAll() sets up shared state with no beforeEach/afterEach reset",
+        "severity": "medium"
+      }
+    ]
+  },
+  "environment": {
+    "label": "DEMO — Environment/data dependency",
+    "intendedCategory": "environment",
+    "runs": [
+      {
+        "run": 1,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 2,
+        "result": "FAIL",
+        "note": "expected 2024-06-01 but received 2024-06-02"
+      },
+      {
+        "run": 3,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 4,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 5,
+        "result": "FAIL",
+        "note": "expected 2024-06-01 but received 2024-06-02"
+      }
+    ],
+    "failureRate": "2/5",
+    "heuristicEvidence": [
+      {
+        "signal": "hardcoded_date",
+        "category": "environment",
+        "source": "test_code",
+        "evidence": "new Date('2024-06-01')",
+        "severity": "medium"
+      }
+    ]
+  },
+  "resource": {
+    "label": "DEMO — Resource contention",
+    "intendedCategory": "resource",
+    "runs": [
+      {
+        "run": 1,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 2,
+        "result": "FAIL",
+        "note": "Error: EADDRINUSE :::4000"
+      },
+      {
+        "run": 3,
+        "result": "PASS",
+        "note": ""
+      },
+      {
+        "run": 4,
+        "result": "FAIL",
+        "note": "Error: EADDRINUSE :::4000"
+      },
+      {
+        "run": 5,
+        "result": "PASS",
+        "note": ""
+      }
+    ],
+    "failureRate": "2/5",
+    "heuristicEvidence": [
+      {
+        "signal": "shared_resource",
+        "category": "resource",
+        "source": "test_code",
+        "evidence": "createServer().listen(4000",
+        "severity": "medium"
+      },
+      {
+        "signal": "shared_resource",
+        "category": "resource",
+        "source": "test_code",
+        "evidence": ":4000",
+        "severity": "medium"
+      },
+      {
+        "signal": "external_network_call",
+        "category": "environment",
+        "source": "test_code",
+        "evidence": "fetch(",
+        "severity": "medium"
+      }
+    ]
+  },
+  "assertion": {
+    "label": "DEMO — Non-deterministic assertion",
+    "intendedCategory": "assertion",
+    "runs": [
+      {
+        "run": 1,
+        "result": "FAIL",
+        "note": "expected 'a1b2c3' but received 'f9e8d7'"
+      },
+      {
+        "run": 2,
+        "result": "FAIL",
+        "note": "expected 'a1b2c3' but received '3c4d5e'"
+      },
+      {
+        "run": 3,
+        "result": "FAIL",
+        "note": "expected 'a1b2c3' but received '77aa11'"
+      }
+    ],
+    "failureRate": "3/3",
+    "heuristicEvidence": [
+      {
+        "signal": "random_value",
+        "category": "assertion",
+        "source": "test_code",
+        "evidence": "uuid()",
+        "severity": "medium"
+      }
+    ]
+  }
+}

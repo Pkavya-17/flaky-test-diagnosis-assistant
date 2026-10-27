@@ -1,0 +1,10 @@
+{
+  "name": "flaky-test-diagnosis-assistant",
+  "version": "0.1.0",
+  "description": "Evidence-based flaky test diagnosis MVP: multi-run analysis, heuristic evidence extraction, schema-validated LLM diagnosis.",
+  "private": true,
+  "scripts": {
+    "test": "node tests/heuristics.test.js && node tests/sync.test.js"
+  },
+  "engines": { "node": ">=18" }
+}
