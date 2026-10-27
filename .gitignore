@@ -1,0 +1,19 @@
+# Dependencies
+node_modules/
+
+# Environment / secrets (none are required today; keep any future keys out of git)
+.env
+.env.*
+!.env.example
+
+# Logs and OS/editor files
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Build output
+dist/
+coverage/
