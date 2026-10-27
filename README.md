@@ -117,7 +117,7 @@ The `assertion` scenario fails on every run, so the app classifies it as a **con
 **Requirements:** a modern browser, and Node.js 18+ for the tests. Nothing to install.
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/Pkavya-17/flaky-test-diagnosis-assistant.git
 cd flaky-test-diagnosis-assistant
 
 # Run the tests
